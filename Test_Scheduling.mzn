@@ -1,5 +1,19 @@
-int: Max_span = 100;
+% Variables from the input file
 int: teste_Number = 10;
+
+array[1..10] of int:  teste =                [2,4,3,4,3,2,1,2,3,5];
+
+% Turn into array of machines 
+array[1..teste_Number] of 0..1: m1 =         [1,1,1,1,1,0,0,0,0,0];
+array[1..teste_Number] of 0..1: m2 =         [0,0,0,0,0,1,1,0,1,1];
+array[1..teste_Number] of 0..1: m3 =         [0,1,1,1,1,1,1,1,1,1];
+
+% Turn into array of resources
+array[1..teste_Number] of 0..1: resource_1 = [0,1,1,1,0,0,0,0,0,0];
+
+
+% Solving starts here
+int: Max_span = 100;
 
 array[1..teste_Number] of var 0..Max_span: maquina_1;
 array[1..teste_Number] of var 0..Max_span: maquina_2;
@@ -9,8 +23,6 @@ var int: time_maq_1;
 var int: time_maq_2;
 var int: time_maq_3;
 
-array[1..10] of int: teste = [2,4,3,4,3,2,1,2,3,5];
-array[1..teste_Number] of 0..1: resource_1 = [0,1,1,1,0,0,0,0,0,0];
 
 var int: time = max(time_maq_1, max(time_maq_2, time_maq_3));
 
@@ -28,14 +40,7 @@ constraint forall(i in 1..teste_Number) (maquina_3[i] = 0 \/ (maquina_3[i] > 0 /
 constraint forall(i in 1..teste_Number) (maquina_1[i] != 0 \/ maquina_2[i] != 0 \/ maquina_3[i] != 0);
 constraint forall(i in 1..teste_Number)(maquina_1[i] = teste[i] \/ maquina_2[i] = teste[i] \/ maquina_3[i] = teste[i]);
 
-
-array[1..teste_Number] of 0..1: m1;
-m1 = [1,1,1,1,1,0,0,0,0,0];
-array[1..teste_Number] of 0..1: m2;
-m2 = [0,0,0,0,0,1,1,0,1,1];
-array[1..teste_Number] of 0..1: m3;
-m3 = [0,1,1,1,1,1,1,1,1,1];
-
+% Ensure that the tests are assigned to the right machine
 constraint forall(i in 1..10)( (maquina_1[i] = 0 /\ m1[i] = 0) \/ m1[i] != 0 );
 constraint forall(i in 1..10)( (maquina_2[i] = 0 /\ m2[i] = 0) \/ m2[i] != 0 );
 constraint forall(i in 1..10)( (maquina_3[i] = 0 /\ m3[i] = 0) \/ m3[i] != 0 );
