@@ -36,13 +36,11 @@ def parse_input_file(input_file):
 
             # Extract and clean resource names, remove quotes, and strip 'r'
             test_resources = [int(r.strip().replace("'", "").strip()[1:]) for r in match.group(3).split(',')] if match.group(3).strip() else []
-            print(test_resources)
+
             if len(test_resources) != 0:
                 for i in test_resources:
                     resources[i-1][cont - 3] = 1
 
-
-    print(f"Number of tests: {num_tests} \nNumber of machines: {num_machines} \nNumber of resources: {num_resources} \nTest Durations: {test_durations} \nMachines Needed: {machines} \nResources Needed: {resources}")
     return num_tests, num_machines, num_resources, test_durations, machines, resources
 
 
@@ -60,19 +58,64 @@ def solve_mzn_with_parsed_input( input_file):
     # Create an instance of the MiniZinc model
     instance = minizinc.Instance(solver, model)
 
+    """
     # Set the parsed input data
-    instance["num_tests"] = num_tests
-    instance["num_machines"] = num_machines
-    instance["num_resources"] = num_resources
+    instance["teste_Number"] = num_tests
+    instance["machine_Number"] = num_machines
+    instance["resource_Number"] = num_resources
+
     instance["test_durations"] = test_durations
     instance["resources"] = resources
+    """
 
     # Solve the model
     result = instance.solve()
-
+    
     # Output all variable assignments
-    print(result)
+    return result
 
+def format_machines_output(machines, resources):
+    output = ""
+    num_lines = len(machines)
+    num_columns = len(machines[0])
+    num_resources = len(resources)
+
+    for line in range(num_lines):
+        # Count the number of tests (i.e., number of non-(0, 0) tuples in this line)
+        n_tests = sum(1 for time, count in machines[line] if count > 0)
+        
+        # Start forming the machine output for the current line
+        line_output = f"machine( 'm{line+1}', {n_tests}"
+        
+        # Collect the test information for this machine (line)
+        tests = []
+        for col in range(num_columns):
+            time, count = machines[line][col]
+            if count > 0:
+                # Collect resources for the current test
+                rec = [f"'r{r+1}'" for r in range(num_resources) if resources[r][col] == 1]
+                
+                # Format the resource string without brackets, just commas between resources
+                rec_str = f"{','.join(rec)}" if rec else ""
+                
+                # Add the tuple (test) with time and optional resource
+                tests.append(f"('t{col+1}',{time}{',' + rec_str if rec_str else ''})")
+        
+        # If there are tests, format them as an array and append to line output
+        if tests:
+            line_output += ", [" + ",".join(tests) + "]"
+
+        # Close the line output
+        line_output += ")\n"  # Add a newline character at the end of each machine output
+        output += line_output
+
+    return output
+
+
+
+
+
+                
 # Main entry point for the script
 if __name__ == "__main__":
     # Argument parser setup
@@ -83,4 +126,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Run the solver with the provided arguments
-    solve_mzn_with_parsed_input(args.input_file)
+    result = solve_mzn_with_parsed_input(args.input_file)
+
+    machines = []
+    machines += [result["maquina_1"]]
+    machines += [result["maquina_2"]]
+    machines += [result["maquina_3"]]
+    
+    resource_1 = [[0,1,0,0,0,0,0,0,0,0],[0,1,0,0,0,0,0,0,0,0]]
+
+    print("% Makespan: ", result["objective"])
+    print(format_machines_output(machines, resource_1))
