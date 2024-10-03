@@ -41,6 +41,7 @@ def parse_input_file(input_file):
                 for i in test_resources:
                     resources[i-1][cont - 3] = 1
 
+    print(num_tests, num_machines, num_resources, test_durations, machines, resources)
     return num_tests, num_machines, num_resources, test_durations, machines, resources
 
 
@@ -58,16 +59,15 @@ def solve_mzn_with_parsed_input( input_file):
     # Create an instance of the MiniZinc model
     instance = minizinc.Instance(solver, model)
 
-    """
+
     # Set the parsed input data
     instance["teste_Number"] = num_tests
+    instance["m"] = machines
     instance["machine_Number"] = num_machines
-    instance["resource_Number"] = num_resources
-
-    instance["test_durations"] = test_durations
-    instance["resources"] = resources
-    """
-
+    #instance["resource_Number"] = num_resources
+    instance["teste"] = test_durations
+    #instance["resources"] = resources
+    
     # Solve the model
     result = instance.solve()
     
@@ -112,10 +112,6 @@ def format_machines_output(machines, resources):
     return output
 
 
-
-
-
-                
 # Main entry point for the script
 if __name__ == "__main__":
     # Argument parser setup
