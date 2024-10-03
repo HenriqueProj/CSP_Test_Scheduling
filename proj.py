@@ -13,7 +13,7 @@ def parse_input_file(input_file):
 
     test_durations = []
     machines = [[0 for _ in range(num_tests)] for _ in range(num_machines)]
-    resources = [[0 for _ in range(num_tests)] for _ in range(num_machines)]
+    resources = [[0 for _ in range(num_tests)] for _ in range(num_resources)]
 
     # Regular expression to match the 'test' lines in the input file
     test_pattern = re.compile(r"test\(\s*'[^']*',\s*(\d+),\s*\[(.*?)\],\s*\[(.*?)\]\s*\)")
@@ -41,7 +41,6 @@ def parse_input_file(input_file):
                 for i in test_resources:
                     resources[i-1][cont - 3] = 1
 
-    print(num_tests, num_machines, num_resources, test_durations, machines, resources)
     return num_tests, num_machines, num_resources, test_durations, machines, resources
 
 
@@ -59,20 +58,21 @@ def solve_mzn_with_parsed_input( input_file):
     # Create an instance of the MiniZinc model
     instance = minizinc.Instance(solver, model)
 
-
     # Set the parsed input data
     instance["teste_Number"] = num_tests
-    instance["m"] = machines
     instance["machine_Number"] = num_machines
-    #instance["resource_Number"] = num_resources
+    instance["resource_Number"] = num_resources
+    
     instance["teste"] = test_durations
-    #instance["resources"] = resources
+    instance["m"] = machines
+    instance["resources"] = resources
     
     # Solve the model
     result = instance.solve()
     
     # Output all variable assignments
-    return result
+    return result, resources
+
 
 def format_machines_output(machines, resources):
     output = ""
@@ -122,14 +122,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Run the solver with the provided arguments
-    result = solve_mzn_with_parsed_input(args.input_file)
+    result, resources = solve_mzn_with_parsed_input(args.input_file)
 
-    machines = []
-    machines += [result["maquina_1"]]
-    machines += [result["maquina_2"]]
-    machines += [result["maquina_3"]]
-    
-    resource_1 = [[0,1,0,0,0,0,0,0,0,0],[0,1,0,0,0,0,0,0,0,0]]
-
+    print(result)
     print("% Makespan: ", result["objective"])
-    print(format_machines_output(machines, resource_1))
+    print(format_machines_output(result["machines"], resources))
