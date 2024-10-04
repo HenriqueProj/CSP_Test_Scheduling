@@ -99,7 +99,7 @@ def format_machines_output(machines, resources):
                 rec_str = f"{','.join(rec)}" if rec else ""
                 
                 # Add the tuple (test) with time and optional resource
-                tests.append(f"('t{col+1}',{time}{',' + rec_str if rec_str else ''})")
+                tests.append(f"('t{col+1}',{time-1}{',' + rec_str if rec_str else ''})")
         
         # If there are tests, format them as an array and append to line output
         if tests:
@@ -124,6 +124,5 @@ if __name__ == "__main__":
     # Run the solver with the provided arguments
     result, resources = solve_mzn_with_parsed_input(args.input_file)
 
-    print(result)
     print("% Makespan: ", result["objective"])
     print(format_machines_output(result["machines"], resources))
