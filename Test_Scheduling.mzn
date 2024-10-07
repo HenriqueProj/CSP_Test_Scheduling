@@ -11,7 +11,9 @@ array[1..machine_Number, 1..teste_Number] of 0..1: m;
 array[1..resource_Number, 1..teste_Number] of 0..1: resources;
 
 % Solving starts here
-int: Max_span = 100000;
+% OPTIMIZING MAX_SPAN
+int: Max_span = sum(teste) + 1;
+
 array[1..machine_Number, 1..teste_Number] of var tuple (0..Max_span, 0..Max_span): machines;
 
 
@@ -60,12 +62,20 @@ constraint forall(r in 1..resource_Number)(
     )
 );
 
-    
+
 array[1..machine_Number] of var int: time_per_machine;
   
 constraint forall(m1 in 1..machine_Number)(
     time_per_machine[m1] = max([machines[m1,i].2 | i in 1..teste_Number]) - 1
 );
+
+
+% OPTIMIZATIONS
+
+constraint forall(j in 1..machine_Number) (
+  sum(i in 1..teste_Number) (machines[j,i].1 == 1) == 1
+);
+
 
 % Total time is the maximum of the individual machine times
 var int: time = max(time_per_machine);
