@@ -10,7 +10,8 @@ def parse_input_file(input_file):
     num_tests = int(re.search(r'Number of tests\s*:\s*(\d+)', lines[0]).group(1))
     num_machines = int(re.search(r'Number of machines\s*:\s*(\d+)', lines[1]).group(1))
     num_resources = int(re.search(r'Number of resources\s*:\s*(\d+)', lines[2]).group(1))
-
+    changes = list(range(1, num_tests + 1))  # Start with [1, 2, 3, ..., num_tests]
+    
     test_durations = []
     machines = [[0 for _ in range(num_tests)] for _ in range(num_machines)]
     resources = [[0 for _ in range(num_tests)] for _ in range(num_resources)]
@@ -40,14 +41,57 @@ def parse_input_file(input_file):
             if len(test_resources) != 0:
                 for i in test_resources:
                     resources[i-1][cont - 3] = 1
+                    
+    M_Combinations  = [[0]]
+    
+    appended = False
 
-    return num_tests, num_machines, num_resources, test_durations, machines, resources
+    # Sort test durations and adjust the changes array to record the swaps
+    sorted_indices = sorted(range(num_tests), key=lambda i: test_durations[i], reverse=True)
+
+    # Sort the arrays based on the sorted indices and update changes array
+    test_durations = [test_durations[i] for i in sorted_indices]
+    machines = [[machines[j][i] for i in sorted_indices] for j in range(len(machines))]
+    resources = [[resources[j][i] for i in sorted_indices] for j in range(len(resources))]
+
+    # Update the changes array to reflect the new positions of the original indices
+    changes = [sorted_indices.index(i) + 1 for i in range(num_tests)]
+
+    print("Sorted Test Durations:", test_durations)
+    print("Sorted Machines:", machines)
+    print("Sorted Resources:", resources)
+    print("Changes Array (Original to Sorted):", changes)
+    
+    # Checks if test arrangement has already been found
+    for i in range(len(machines)):
+        for j in range(len(M_Combinations)):
+            if machines[i] == machines[ M_Combinations[j][0] ]:
+                M_Combinations[j].append(i)
+                appended = True
+                break
+
+        if machines[i] != machines[j][0] and not appended:
+            M_Combinations.append([i])
+        
+        appended = False
+        
+    M_Combinations[0].pop(0)
+    
+    Machines_per_Combination = max(len(subarray) for subarray in M_Combinations)
+    for i in range(len(M_Combinations)):
+        for j in range(Machines_per_Combination - len(M_Combinations[i])):
+            M_Combinations[i].append(-1)
+
+            
+    print(Machines_per_Combination)
+    print(M_Combinations)
+    return num_tests, num_machines, num_resources, test_durations, machines, resources, M_Combinations, Machines_per_Combination
 
 
 # Function to solve the MiniZinc model with the parsed input data
 def solve_mzn_with_parsed_input( input_file):
     # Parse the custom input file
-    num_tests, num_machines, num_resources, test_durations, machines, resources = parse_input_file(input_file)
+    num_tests, num_machines, num_resources, test_durations, machines, resources, M_Combinations, Machines_per_Combination = parse_input_file(input_file)
 
     # Load the MiniZinc model
     model = minizinc.Model("Test_Scheduling.mzn")
@@ -62,11 +106,13 @@ def solve_mzn_with_parsed_input( input_file):
     instance["teste_Number"] = num_tests
     instance["machine_Number"] = num_machines
     instance["resource_Number"] = num_resources
-    
+   
     instance["teste"] = test_durations
     instance["m"] = machines
     instance["resources"] = resources
-    
+    instance["Number_of_Combinations"] = len(M_Combinations)
+    instance["Machines_per_Combination"] = Machines_per_Combination
+    instance["color_of_machines"] = M_Combinations
     # Solve the model
     result = instance.solve()
     
@@ -124,5 +170,6 @@ if __name__ == "__main__":
     # Run the solver with the provided arguments
     result, resources = solve_mzn_with_parsed_input(args.input_file)
 
+    print(result)
     print("% Makespan: ", result["objective"])
     print(format_machines_output(result["machines"], resources))
