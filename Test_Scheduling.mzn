@@ -20,6 +20,7 @@ array[1..Number_of_Combinations, 1..Machines_per_Combination] of -1..machine_Num
 
 array[1..machine_Number, 1..teste_Number] of var tuple (0..Max_span, 0..Max_span): machines;
 
+array[1..machine_Number] of var int: time_per_machine;
 
 constraint forall(i in 1..Number_of_Combinations) (
     forall(j in 1..Machines_per_Combination - 1 where color_of_machines[i, j+1] != -1) (
@@ -33,6 +34,7 @@ constraint forall(i in 1..Number_of_Combinations) (
     )
 );
 
+
 % Restriction for machine values: 0 or >= 1
 constraint forall(j in 1..machine_Number, i in 1..teste_Number where m[j,i] == 0)(
   machines[j,i].1=0 /\ machines[j,i].2=0
@@ -41,54 +43,56 @@ constraint forall(j in 1..machine_Number, i in 1..teste_Number where m[j,i] == 0
 
 % Ensure each test is assigned to exactly one machine
 constraint forall(i in 1..teste_Number) (
-    sum(j in 1..machine_Number) (machines[j,i].1 > 0 /\ m[j,i] == 1) == 1
+    sum(j in 1..machine_Number) (machines[j,i].1 > 0) == 1
 );
 
 
 % Ensure that the finish value is the same as the starting value + duration in all machines
 constraint forall(i in 1..teste_Number) (
-    forall(j in 1..machine_Number) (
-        machines[j,i].1 == 0 -> machines[j,i].2 = 0
+    forall(j in 1..machine_Number where machines[j,i].1 == 0) (
+        machines[j,i].2 = 0
     )
 );
 
 % Ensure that the finish value is the same as the start value + duration in all machines
 constraint forall(i in 1..teste_Number) (
-    forall(j in 1..machine_Number) (
-        (machines[j,i].1 != 0 /\ m[j,i] == 1) -> machines[j,i].2 = machines[j,i].1 + teste[i]
+    forall(j in 1..machine_Number where  (machines[j,i].1 != 0)) (
+        machines[j,i].2 = machines[j,i].1 + teste[i]
     )
 );
 
 
 % Ensure no overlapping for tests in the same machine
 constraint forall(k in 1..machine_Number) (
-    forall(i, j in 1..teste_Number where i != j) (
-        (machines[k,i].1 != 0 /\ machines[k,j].1 != 0) -> 
-        (machines[k,j].1 >= machines[k,i].2 \/ machines[k,i].1 >= machines[k,j].2)
+    forall(i, j in 1..teste_Number where (i != j /\ machines[k,i].1 != 0 /\ machines[k,j].1 != 0)) ( 
+        (machines[k,j].1 == machines[k,i].2 \/ machines[k,i].1 == machines[k,j].2)
     )
 );
 
 
 constraint forall(r in 1..resource_Number)( 
     forall(i, j in 1..teste_Number where resources[r,i] == 1 /\ resources[r,j] == 1 /\ i != j)(
-        forall(m1, m2 in 1..machine_Number where m1 != m2)(
-            (machines[m1,i].1 != 0 /\ machines[m2,j].1 != 0) -> 
+        forall(m1, m2 in 1..machine_Number where (m1 != m2 /\ machines[m1,i].1 != 0 /\ machines[m2,j].1 != 0))(
             (machines[m1,i].1 >= machines[m2,j].2 \/ machines[m2,j].1 >= machines[m1,i].2)
         )
     )
 );
 
-
-array[1..machine_Number] of var int: time_per_machine;
+constraint forall(j in 1..machine_Number) (
+  sum(i in 1..teste_Number) (machines[j,i].1 ==1 ) == 1
+);
   
 constraint forall(m1 in 1..machine_Number)(
-    time_per_machine[m1] = max([machines[m1,i].2 | i in 1..teste_Number]) - 1
+    time_per_machine[m1] = max([machines[m1,i].2 | i in 1..teste_Number]) -1
 );
 
 
 % Total time is the maximum of the individual machine times
 var int: time = max(time_per_machine);
 
+% Calcular o tempo ótimo com base nos testes que requerem recursos globais
+var int: best_time = max(max(teste), max(r in 1..resource_Number) (sum(i in 1..teste_Number where resources[r, i] == 1) (teste[i])));
 
+constraint time >= best_time /\ time <= sum(teste);
 % Solve by minimizing the total time
-solve::int_search([machines[j,i].2 | j in 1..machine_Number, i in 1..teste_Number], input_order, indomain_min) minimize time;
+solve:: int_search([machines[j,i].2 | j in 1..machine_Number, i in 1..teste_Number], input_order, indomain_split) minimize time;

@@ -3,7 +3,7 @@ import subprocess
 import time
 
 # Folder containing the files
-folder_path = '../tsp-instances/'
+folder_path = '/mnt/c/Users/afons/OneDrive/Documents/College/Procura_e_Planeamento/CSP_Test_Scheduling'
 proj_script = 'proj.py'
 
 success_count = 0

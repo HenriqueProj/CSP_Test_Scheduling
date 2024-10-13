@@ -1,6 +1,9 @@
 import minizinc
 import re
 import argparse
+import copy
+
+sorted_indices = []
 
 # Function to parse the input file
 def parse_input_file(input_file):
@@ -41,12 +44,13 @@ def parse_input_file(input_file):
             if len(test_resources) != 0:
                 for i in test_resources:
                     resources[i-1][cont - 3] = 1
-                    
+ 
     M_Combinations  = [[0]]
     
     appended = False
 
     # Sort test durations and adjust the changes array to record the swaps
+    global sorted_indices 
     sorted_indices = sorted(range(num_tests), key=lambda i: test_durations[i], reverse=True)
 
     # Sort the arrays based on the sorted indices and update changes array
@@ -57,10 +61,10 @@ def parse_input_file(input_file):
     # Update the changes array to reflect the new positions of the original indices
     changes = [sorted_indices.index(i) + 1 for i in range(num_tests)]
 
-    print("Sorted Test Durations:", test_durations)
-    print("Sorted Machines:", machines)
-    print("Sorted Resources:", resources)
-    print("Changes Array (Original to Sorted):", changes)
+    #print("Sorted Test Durations:", test_durations)
+    #print("Sorted Machines:", machines)
+    #print("Sorted Resources:", resources)
+    #print("Changes Array (Original to Sorted):", changes)
     
     # Checks if test arrangement has already been found
     for i in range(len(machines)):
@@ -114,13 +118,34 @@ def solve_mzn_with_parsed_input( input_file):
     instance["Machines_per_Combination"] = Machines_per_Combination
     instance["color_of_machines"] = M_Combinations
     # Solve the model
-    result = instance.solve()
     
+   
+    result = instance.solve()
+      
     # Output all variable assignments
     return result, resources
 
 
+def reorder(machines, resources):
+    global sorted_indices
+
+    machines_ = copy.deepcopy(machines)
+    resources_ = copy.deepcopy(resources)
+
+    for i in range(len(machines)):
+        for j in range(len(sorted_indices)):
+            machines_[i][sorted_indices[j]] = machines[i][j]
+    
+    for i in range(len(resources)):
+        for j in range(len(sorted_indices)):
+            resources_[i][sorted_indices[j]] = resources[i][j]
+
+    return machines_, resources_
+
+
 def format_machines_output(machines, resources):
+    machines, resources = reorder(machines, resources)
+
     output = ""
     num_lines = len(machines)
     num_columns = len(machines[0])
