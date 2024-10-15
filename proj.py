@@ -13,7 +13,6 @@ def parse_input_file(input_file):
     num_tests = int(re.search(r'Number of tests\s*:\s*(\d+)', lines[0]).group(1))
     num_machines = int(re.search(r'Number of machines\s*:\s*(\d+)', lines[1]).group(1))
     num_resources = int(re.search(r'Number of resources\s*:\s*(\d+)', lines[2]).group(1))
-    changes = list(range(1, num_tests + 1))  # Start with [1, 2, 3, ..., num_tests]
     
     test_durations = []
     machines = [[0 for _ in range(num_tests)] for _ in range(num_machines)]
@@ -44,59 +43,27 @@ def parse_input_file(input_file):
             if len(test_resources) != 0:
                 for i in test_resources:
                     resources[i-1][cont - 3] = 1
- 
-    M_Combinations  = [[0]]
     
-    appended = False
-
-    # Sort test durations and adjust the changes array to record the swaps
+    #print(test_durations)
+    """
+    # Sort test durations to record the swaps
     global sorted_indices 
     sorted_indices = sorted(range(num_tests), key=lambda i: test_durations[i], reverse=True)
 
-    # Sort the arrays based on the sorted indices and update changes array
+    # Sort the arrays based on the sorted indices
     test_durations = [test_durations[i] for i in sorted_indices]
     machines = [[machines[j][i] for i in sorted_indices] for j in range(len(machines))]
     resources = [[resources[j][i] for i in sorted_indices] for j in range(len(resources))]
-
-    # Update the changes array to reflect the new positions of the original indices
-    changes = [sorted_indices.index(i) + 1 for i in range(num_tests)]
-
-    #print("Sorted Test Durations:", test_durations)
-    #print("Sorted Machines:", machines)
-    #print("Sorted Resources:", resources)
-    #print("Changes Array (Original to Sorted):", changes)
-    
-    # Checks if test arrangement has already been found
-    for i in range(len(machines)):
-        for j in range(len(M_Combinations)):
-            if machines[i] == machines[ M_Combinations[j][0] ]:
-                M_Combinations[j].append(i)
-                appended = True
-                break
-
-        if machines[i] != machines[j][0] and not appended:
-            M_Combinations.append([i])
-        
-        appended = False
-        
-    M_Combinations[0].pop(0)
-    
-    Machines_per_Combination = max(len(subarray) for subarray in M_Combinations)
-    for i in range(len(M_Combinations)):
-        for j in range(Machines_per_Combination - len(M_Combinations[i])):
-            M_Combinations[i].append(-1)
-
+    """
             
-    print(Machines_per_Combination)
-    print(M_Combinations)
-    return num_tests, num_machines, num_resources, test_durations, machines, resources, M_Combinations, Machines_per_Combination
+    return num_tests, num_machines, num_resources, test_durations, machines, resources
 
 
 # Function to solve the MiniZinc model with the parsed input data
 def solve_mzn_with_parsed_input( input_file):
     # Parse the custom input file
-    num_tests, num_machines, num_resources, test_durations, machines, resources, M_Combinations, Machines_per_Combination = parse_input_file(input_file)
-
+    num_tests, num_machines, num_resources, test_durations, machines, resources = parse_input_file(input_file)
+    
     # Load the MiniZinc model
     model = minizinc.Model("Test_Scheduling.mzn")
 
@@ -114,16 +81,13 @@ def solve_mzn_with_parsed_input( input_file):
     instance["teste"] = test_durations
     instance["m"] = machines
     instance["resources"] = resources
-    instance["Number_of_Combinations"] = len(M_Combinations)
-    instance["Machines_per_Combination"] = Machines_per_Combination
-    instance["color_of_machines"] = M_Combinations
+
+
     # Solve the model
-    
-   
     result = instance.solve()
       
     # Output all variable assignments
-    return result, resources
+    return result, num_machines, resources
 
 
 def reorder(machines, resources):
@@ -143,26 +107,30 @@ def reorder(machines, resources):
     return machines_, resources_
 
 
-def format_machines_output(machines, resources):
+def format_machines_output(test_start, test_machine, num_machines, resources):
+    """
     machines, resources = reorder(machines, resources)
+    """
 
     output = ""
-    num_lines = len(machines)
-    num_columns = len(machines[0])
+    
+    num_tests= len(test_start)
     num_resources = len(resources)
 
-    for line in range(num_lines):
+    for line in range(1, num_machines+1):
         # Count the number of tests (i.e., number of non-(0, 0) tuples in this line)
-        n_tests = sum(1 for time, count in machines[line] if count > 0)
+        n_tests = sum(1 for machine in test_machine if machine == line)
         
         # Start forming the machine output for the current line
-        line_output = f"machine( 'm{line+1}', {n_tests}"
+        line_output = f"machine( 'm{line}', {n_tests}"
         
         # Collect the test information for this machine (line)
         tests = []
-        for col in range(num_columns):
-            time, count = machines[line][col]
-            if count > 0:
+        for col in range(num_tests):
+            time = test_start[col]
+            count = test_machine[col]
+
+            if count == line:
                 # Collect resources for the current test
                 rec = [f"'r{r+1}'" for r in range(num_resources) if resources[r][col] == 1]
                 
@@ -173,6 +141,9 @@ def format_machines_output(machines, resources):
                 tests.append(f"('t{col+1}',{time-1}{',' + rec_str if rec_str else ''})")
         
         # If there are tests, format them as an array and append to line output
+        # sort tests by the second element
+        tests = sorted(tests, key=lambda x: int(x.split(',')[1].split(')')[0]))
+
         if tests:
             line_output += ", [" + ",".join(tests) + "]"
 
@@ -193,8 +164,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Run the solver with the provided arguments
-    result, resources = solve_mzn_with_parsed_input(args.input_file)
+    result, num_machines, resources = solve_mzn_with_parsed_input(args.input_file)
 
-    print(result)
+    #print(result)
     print("% Makespan: ", result["objective"])
-    print(format_machines_output(result["machines"], resources))
+    print(format_machines_output(result["test_start"], result["test_machine"], num_machines, resources))
