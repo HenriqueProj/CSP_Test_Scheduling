@@ -60,10 +60,22 @@ def parse_input_file(input_file):
 
 
 # Function to solve the MiniZinc model with the parsed input data
-def solve_mzn_with_parsed_input( input_file):
+def solve_mzn_with_parsed_input(input_file):
     # Parse the custom input file
     num_tests, num_machines, num_resources, test_durations, machines, resources = parse_input_file(input_file)
     
+    # Step 1: Compute the number of available machines for each test
+    machines_per_test = compute_machines_per_test(machines)
+    
+    # Sort the machines_per_test based on the number of machines available for each test
+    sorted_indices = sorted(range(num_tests), key=lambda i: machines_per_test[i])
+    
+    # Reorder machines and resources according to sorted_indices
+    #machines_sorted, resources_sorted = reorder(machines, resources, sorted_indices)
+    
+    # Check if there are any tests that can only run in a specific machine
+    machines = modify_m_array(machines)
+
     # Load the MiniZinc model
     model = minizinc.Model("Test_Scheduling.mzn")
 
@@ -77,34 +89,42 @@ def solve_mzn_with_parsed_input( input_file):
     instance["teste_Number"] = num_tests
     instance["machine_Number"] = num_machines
     instance["resource_Number"] = num_resources
-   
     instance["teste"] = test_durations
+    #instance["m"] = machines_sorted
+    #instance["resources"] = resources_sorted
     instance["m"] = machines
     instance["resources"] = resources
 
+    # Step 7: Pass the sorted test order to MiniZinc for the int_search
+    instance["machine_per_test"] = machines_per_test  # Pass original machines_per_test
+
+    # Create and send the color_of_machines array
+    #color_of_machines = create_color_of_machines(machines_sorted)
+    #instance["color_of_machines"] = color_of_machines
 
     # Solve the model
     result = instance.solve()
-      
+    
     # Output all variable assignments
     return result, num_machines, resources
 
 
-def reorder(machines, resources):
-    global sorted_indices
-
-    machines_ = copy.deepcopy(machines)
-    resources_ = copy.deepcopy(resources)
-
-    for i in range(len(machines)):
-        for j in range(len(sorted_indices)):
-            machines_[i][sorted_indices[j]] = machines[i][j]
+def reorder(machines, resources, test_durations, sorted_indices):
+    """
+    Reorder machines, resources, and test_durations based on the sorted_indices.
+    This ensures all arrays are ordered according to the number of machines per test.
+    """
+    # Reorder the machines array
+    machines_sorted = [[machines[j][i] for i in sorted_indices] for j in range(len(machines))]
     
-    for i in range(len(resources)):
-        for j in range(len(sorted_indices)):
-            resources_[i][sorted_indices[j]] = resources[i][j]
+    # Reorder the resources array
+    resources_sorted = [[resources[j][i] for i in sorted_indices] for j in range(len(resources))]
+    
+    # Reorder the test_durations array
+    test_durations_sorted = [test_durations[i] for i in sorted_indices]
 
-    return machines_, resources_
+    return machines_sorted, resources_sorted, test_durations_sorted
+
 
 
 def format_machines_output(test_start, test_machine, num_machines, resources):
@@ -153,6 +173,46 @@ def format_machines_output(test_start, test_machine, num_machines, resources):
 
     return output
 
+# Function to modify the m array based on the condition that the sum of the subarray is 1
+def modify_m_array(m):
+    # Iterate over each test (i.e., each index i in the m array)
+    for i in range(len(m[0])):  # Iterate through tests (columns)
+        # For each test, check the sum of the corresponding subarray (machines)
+        machine_sum = sum(m[j][i] for j in range(len(m)))
+        # If sum is 1, mark that machine by setting the 1 to 2
+        if machine_sum == 1:
+            for j in range(len(m)):
+                if m[j][i] == 1:
+                    m[j][i] = 2  # Mark this machine with 2 since it is the only one that can execute this test
+    return m
+
+# Function to generate the color_of_machines array
+def create_color_of_machines(machines):
+    num_machines = len(machines)
+    machine_groups = {}
+
+    # Create a mapping of unique test capability combinations to a group number
+    for machine_id, machine_tests in enumerate(machines):
+        machine_tuple = tuple(machine_tests)
+        if machine_tuple not in machine_groups:
+            machine_groups[machine_tuple] = len(machine_groups) + 1
+
+    # Create the color_of_machines array based on the group each machine belongs to
+    color_of_machines = [machine_groups[tuple(machines[i])] for i in range(num_machines)]
+    return color_of_machines
+
+def compute_machines_per_test(machines):
+    """
+    Calculate how many machines each test can run on.
+    """
+    num_tests = len(machines[0])
+    num_machines = len(machines)
+    machines_per_test = [0] * num_tests
+
+    for i in range(num_tests):
+        machines_per_test[i] = sum(machines[j][i] == 1 for j in range(num_machines))
+
+    return machines_per_test
 
 # Main entry point for the script
 if __name__ == "__main__":
