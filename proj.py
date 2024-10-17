@@ -2,6 +2,7 @@ import minizinc
 import re
 import argparse
 import copy
+import datetime
 
 sorted_indices = []
 
@@ -48,9 +49,7 @@ def parse_input_file(input_file):
 
 
 # Function to solve the MiniZinc model with the parsed input data
-def solve_mzn_with_parsed_input(input_file):
-    # Parse the custom input file
-    num_tests, num_machines, num_resources, test_durations, machines, resources = parse_input_file(input_file)
+def solve_mzn_with_parsed_input(num_tests, num_machines, num_resources, test_durations, machines, resources, pointer):
     
     # Step 1: Compute the number of available machines for each test
     machines_per_test = compute_machines_per_test(machines)
@@ -60,7 +59,8 @@ def solve_mzn_with_parsed_input(input_file):
     
     # Step 3: Calculate combined priority for each test
     combined_priority = [resource_priority[i] * 1000 + num_machines - machines_per_test[i] for i in range(num_tests)]
-    #print("COmbined priority:",combined_priority)
+    #combined_priority = calculate_dynamic_priority(test_durations, machines, resources, num_tests, num_machines, num_resources)
+    #print("Combined priority:",combined_priority)
     # Step 4: Sort indices based on combined_priority (highest to lowest)
     test_index_sorted = sorted(range(num_tests), key=lambda i: combined_priority[i], reverse=True)
     #print("test_index_sorted priority:",test_index_sorted)
@@ -81,7 +81,7 @@ def solve_mzn_with_parsed_input(input_file):
     model = minizinc.Model("Test_Scheduling.mzn")
 
     # Step 9: Load the MiniZinc solver (gecode in this case)
-    solver = minizinc.Solver.lookup("gecode")
+    solver = minizinc.Solver.lookup("com.google.ortools.sat")
 
     # Step 10: Create an instance of the MiniZinc model
     instance = minizinc.Instance(solver, model)
@@ -95,9 +95,15 @@ def solve_mzn_with_parsed_input(input_file):
     instance["resources"] = resources_sorted
     instance["color_of_machines"] = color_of_machines  # Assuming a placeholder for coloring
     instance["test_no_resources"] = test_no_resources
+    instance["pointer"] = pointer
+
     # Solve the model
+    #TIMELIMIT = datetime.timedelta(seconds=60)
+    #result = instance.solve(timeout=TIMELIMIT)
     result = instance.solve()
-    
+    if not result:
+        return None, None, None, None, None, None
+
     # Revert the sorted results back to their original order
     original_test_start = revert_order(result["test_start"], test_index_sorted )
     original_test_machine = revert_order(result["test_machine"], test_index_sorted )
@@ -107,6 +113,39 @@ def solve_mzn_with_parsed_input(input_file):
 
     # Output all variable assignments
     return result, original_test_durations, original_machines, original_resources, original_test_start, original_test_machine
+
+def binary_search(input_file):
+    num_tests, num_machines, num_resources, test_durations, machines, resources = parse_input_file(input_file)
+    
+    
+    #print(f"Lower bound: {lower}")
+    # Checks first if result is only dependent of resources (best case)
+    #result, original_test_durations, original_machines, original_resources, original_test_start, original_test_machine = solve_mzn_with_parsed_input(num_tests, num_machines, num_resources, test_durations, machines, resources, lower)
+    #print(f"Result: {result}")
+    #if result is not None:
+    #    return result, original_test_durations, original_machines, original_resources, original_test_start, original_test_machine, lower
+
+
+    # Binary search starts here
+    lower = max(max(test_durations), max(sum(test_durations[i] for i in range(num_tests) if resources[r][i] == 1) for r in range(num_resources)))
+    higher = sum(test_durations) - (num_machines - 1) * min(test_durations)
+
+    pointer = lower + (higher - lower) // 2
+
+    while lower < higher:
+        #print(f"Lower: {lower}, Higher: {higher}, Pointer: {pointer}")
+        temp_result, temp_original_test_durations, temp_original_machines, temp_original_resources, temp_original_test_start, temp_original_test_machine = solve_mzn_with_parsed_input(num_tests, num_machines, num_resources, test_durations, machines, resources, pointer)
+
+        if temp_result is not None:
+            result, original_test_durations, original_machines, original_resources, original_test_start, original_test_machine = temp_result, temp_original_test_durations, temp_original_machines, temp_original_resources, temp_original_test_start, temp_original_test_machine
+            higher = min(pointer, result["time"])
+        else:
+            lower = pointer + 1
+
+        pointer = lower + (higher - lower) // 2
+
+    return result, original_test_durations, original_machines, original_resources, original_test_start, original_test_machine, lower
+
 
 def calculate_resource_priority(resources, num_tests, num_resources):
     # Calculate resource priority: the number of resources used by each test
@@ -144,6 +183,27 @@ def revert_matrix_order(sorted_matrix, sorted_indices):
             original_matrix[j][sorted_index] = sorted_matrix[j][i]
     return original_matrix
 
+def calculate_dynamic_priority(test_durations, machines, resources, num_tests, num_machines, num_resources):
+    machine_load = [0] * num_machines  # Track load on each machine
+    resource_priority = calculate_resource_priority(resources, num_tests, num_resources)
+    
+    combined_priority = [0] * num_tests
+    for i in range(num_tests):
+        for m in range(num_machines):
+            if machines[m][i] == 1:
+                machine_load[m] += 1  # Update machine load
+        
+        # Calculate machine load factor
+        machine_count = sum(machines[m][i] for m in range(num_machines))  # Count of machines for this test
+        #print(i, "\n", machine_load, "\n", machines)
+        load_factor = sum(machine_load[m] for m in range(num_machines) if machines[m][i] == 1)
+        
+        resource_demand = sum(resources[r][i] for r in range(num_resources))
+
+        combined_priority[i] = resource_demand * 1000 + load_factor * 100 // machine_count + num_machines - machine_count
+        
+
+    return combined_priority
 
 def format_machines_output(test_start, test_machine, num_machines, resources):
     output = ""
@@ -223,7 +283,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Run the solver with the provided arguments
-    result, original_test_durations, original_machines, original_resources, original_test_start, original_test_machine = solve_mzn_with_parsed_input(args.input_file)
-
-    print("% Makespan: ", result["objective"])
+    result, original_test_durations, original_machines, original_resources, original_test_start, original_test_machine, time = binary_search(args.input_file)
+    print("% Makespan: ", time)
     print(format_machines_output(original_test_start, original_test_machine, len(original_machines), original_resources))

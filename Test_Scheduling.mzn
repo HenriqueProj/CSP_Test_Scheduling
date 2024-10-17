@@ -5,12 +5,13 @@ include "cumulative.mzn";
 int: teste_Number;
 int: machine_Number;
 int: resource_Number;
+int: pointer;
 
 % Test durations
 array[1..teste_Number] of int: teste;
 
 % Start and end times for each test
-array[1..teste_Number] of var 1..sum(teste)+1 - min(teste): test_start;
+array[1..teste_Number] of var 1..pointer + 1 - min(teste): test_start;
 
 % Machines that can run each test
 array[1..teste_Number] of var 1..machine_Number: test_machine;
@@ -35,6 +36,10 @@ array[1..teste_Number] of int: test_no_resources;
 %        t_i > t_j
 %);
 
+var int: time;
+constraint time = max([test_start[i] + teste[i] | i in 1..teste_Number]) - 1;
+
+constraint time <= pointer;
 
 % Make sure test is assigned to a machine that can run it
 constraint forall(i in 1..teste_Number)(
@@ -62,8 +67,6 @@ constraint forall(i in 1..machine_Number)(
     )
 );
 
-
-
 % Arrange the m
 %constraint forall(m1 in 1..machine_Number) (
 %  cumulative(
@@ -73,24 +76,16 @@ constraint forall(i in 1..machine_Number)(
 %  1)
 %);
 
-
 % Total time is the maximum of the individual machine times
-var int: time = max([test_start[i] + teste[i] | i in 1..teste_Number]) - 1;
-
 % Lowest possible time -> max between the biggest test and the time required for the largest resource
-var int: best_time = max(max(teste), max(r in 1..resource_Number) (sum(i in 1..teste_Number where resources[r, i] == 1) (teste[i])));
+%var int: best_time = max(max(teste), max(r in 1..resource_Number) (sum(i in 1..teste_Number where resources[r, i] == 1) (teste[i])));
 
-var int: worst_time = sum(teste) - (machine_Number + 1) * min(teste);
-
-constraint time >= best_time /\ time <= worst_time;
 
 % Now sort the tests by combined_priority
 solve :: int_search(
     [test_start[i] | i in 1..teste_Number],
     input_order,
-    indomain_min,
+    indomain_split,
     complete
-) minimize time;
-
-
+) satisfy;
 %[test_start[i] | i in 1..teste_Number where sum(r in 1..resource_Number)(resources[r, i] == 1) > 0] ++

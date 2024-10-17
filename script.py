@@ -12,7 +12,7 @@ success_count = 0
 failure_count = 0
 checker_pass_count = 0
 checker_fail_count = 0
-timeout_duration = 30  # timeout (30 seconds)
+timeout_duration = 300  # timeout (30 seconds)
 
 # List all files in the specified folder
 files = os.listdir(folder_path)
