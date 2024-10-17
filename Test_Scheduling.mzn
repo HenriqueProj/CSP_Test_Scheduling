@@ -8,6 +8,7 @@ int: resource_Number;
 
 % Test durations
 array[1..teste_Number] of int: teste;
+
 % Start and end times for each test
 array[1..teste_Number] of var 1..sum(teste)+1 - min(teste): test_start;
 
@@ -19,9 +20,10 @@ array[1..machine_Number, 1..teste_Number] of 0..2: m;
 array[1..resource_Number, 1..teste_Number] of 0..1: resources;
 
 % Groups of machines to help break simetry
-%array[1..machine_Number] of int: color_of_machines;
+array[1..machine_Number] of int: color_of_machines;
 
-%array[1..teste_Number] of int: machines_per_test;
+array[1..teste_Number] of int: test_no_resources;
+
 
 
 % Garantir que o tempo de execução siga a ordem dentro dos grupos de máquinas
@@ -44,11 +46,6 @@ constraint forall(j in 1..machine_Number, i in 1..teste_Number where m[j,i]==2) 
     test_machine[i] = j
 );
 
-% Make sure every machine has at least one test
-%constraint forall(v in 1..machine_Number) (
-%    exists(i in 1..teste_Number)(test_machine[i] == v)
-%);
-
 % Check if resources are right
 constraint forall(r in 1..resource_Number)(
     cumulative([test_start[i] | i in 1..teste_Number where resources[r, i] == 1],
@@ -58,6 +55,14 @@ constraint forall(r in 1..resource_Number)(
 );
 
 constraint diffn(test_start, test_machine, teste, [1 | i in 1..teste_Number]);
+
+constraint forall(i in 1..machine_Number)(
+    forall(t in 1..teste_Number-1 where test_machine[t] == i /\ test_no_resources[t] == 1 /\ test_machine[t+1] == i /\ test_no_resources[t+1] == 1) (
+        abs(test_start[t+1] - (test_start[t] + teste[t])) > 0 -> test_start[t] + teste[t] == test_start[t+1]
+    )
+);
+
+
 
 % Arrange the m
 %constraint forall(m1 in 1..machine_Number) (
@@ -79,13 +84,13 @@ var int: worst_time = sum(teste) - (machine_Number + 1) * min(teste);
 
 constraint time >= best_time /\ time <= worst_time;
 
-% Solve by minimizing the total time
+% Now sort the tests by combined_priority
 solve :: int_search(
-    [test_start[i] | i in 1..teste_Number] ++
-    [test_machine[i] | i in 1..teste_Number],
+    [test_start[i] | i in 1..teste_Number],
     input_order,
     indomain_min,
     complete
 ) minimize time;
+
 
 %[test_start[i] | i in 1..teste_Number where sum(r in 1..resource_Number)(resources[r, i] == 1) > 0] ++
