@@ -6,7 +6,7 @@ import sys
 # Folder paths
 folder_path = './tsp-selected-instances'
 proj_script = 'proj.py'
-checker_script = 'checker/checker.py'
+checker_script = 'checker/checker (1).py'
 
 success_count = 0
 failure_count = 0
@@ -34,9 +34,9 @@ for file in files:
         try:
             # Run the command: python3 proj.py <file_path> with a timeout
             start_time = time.time()
-            with open(output_file_path + ".out", 'w', buffering=1) as f_out:  # Immediate flushing
-                result = subprocess.run(['python3', proj_script, file_path],
-                                        timeout=timeout_duration, stdout=f_out, stderr=subprocess.STDOUT, text=True)
+
+            result = subprocess.run(['python3', proj_script, file_path,output_file_path + ".out"],
+                            timeout=timeout_duration, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             elapsed_time = time.time() - start_time
 
             # Check if the process finished within the timeout

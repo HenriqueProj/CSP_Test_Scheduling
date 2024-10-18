@@ -51,56 +51,46 @@ def parse_input_file(input_file):
 # Function to solve the MiniZinc model with the parsed input data
 def solve_mzn_with_parsed_input(num_tests, num_machines, num_resources, test_durations, machines, resources, pointer):
     
-    # Step 1: Compute the number of available machines for each test
+    # Compute the number of available machines for each test
     machines_per_test = compute_machines_per_test(machines)
     
-    # Step 2: Calculate resource priorities for the tests
+    # Calculate resource priorities for the tests
     resource_priority = calculate_resource_priority(resources, num_tests, num_resources)
     
-    # Step 3: Calculate combined priority for each test
+    # Calculate combined priority for each test
     combined_priority = [resource_priority[i] * 1000 + num_machines - machines_per_test[i] for i in range(num_tests)]
-    #combined_priority = calculate_dynamic_priority(test_durations, machines, resources, num_tests, num_machines, num_resources)
-    #print("Combined priority:",combined_priority)
-    # Step 4: Sort indices based on combined_priority (highest to lowest)
+    # Sort indices based on combined_priority (highest to lowest)
     test_index_sorted = sorted(range(num_tests), key=lambda i: combined_priority[i], reverse=True)
-    #print("test_index_sorted priority:",test_index_sorted)
     # Reorder the machines, resources, test durations, etc., based on sorted test_index_sorted
     machines_sorted, resources_sorted, test_durations_sorted = reorder(
         machines, resources, test_durations, test_index_sorted
     )
     
-    color_of_machines = create_color_of_machines(machines_sorted)
     
-    # Step 6: Check if there are any tests that can only run on specific machines
-    #machines = modify_m_array(machines_sorted)
+    # Check if there are any tests that can only run on specific machines
+    machines_sorted = modify_m_array(machines_sorted)
     
-    # Step 7: Create the test_no_resources array
-    test_no_resources = create_test_no_resources(resources_sorted, num_tests, num_resources)
-    
-    # Step 8: Load the MiniZinc model
+    # Load the MiniZinc model
     model = minizinc.Model("Test_Scheduling.mzn")
 
-    # Step 9: Load the MiniZinc solver (gecode in this case)
+    # Load the MiniZinc solver (gecode in this case)
     solver = minizinc.Solver.lookup("com.google.ortools.sat")
 
-    # Step 10: Create an instance of the MiniZinc model
+    # Create an instance of the MiniZinc model
     instance = minizinc.Instance(solver, model)
 
-    # Step 11: Pass the sorted and reordered input data to the MiniZinc model
+    # Pass the sorted and reordered input data to the MiniZinc model
     instance["teste_Number"] = num_tests
     instance["machine_Number"] = num_machines
     instance["resource_Number"] = num_resources
     instance["teste"] = test_durations_sorted
     instance["m"] = machines_sorted
     instance["resources"] = resources_sorted
-    instance["color_of_machines"] = color_of_machines  # Assuming a placeholder for coloring
-    instance["test_no_resources"] = test_no_resources
     instance["pointer"] = pointer
 
     # Solve the model
-    #TIMELIMIT = datetime.timedelta(seconds=60)
-    #result = instance.solve(timeout=TIMELIMIT)
-    result = instance.solve()
+    TIMELIMIT = datetime.timedelta(seconds=15)
+    result = instance.solve(timeout=TIMELIMIT)
     if not result:
         return None, None, None, None, None, None
 
@@ -117,15 +107,6 @@ def solve_mzn_with_parsed_input(num_tests, num_machines, num_resources, test_dur
 def binary_search(input_file):
     num_tests, num_machines, num_resources, test_durations, machines, resources = parse_input_file(input_file)
     
-    
-    #print(f"Lower bound: {lower}")
-    # Checks first if result is only dependent of resources (best case)
-    #result, original_test_durations, original_machines, original_resources, original_test_start, original_test_machine = solve_mzn_with_parsed_input(num_tests, num_machines, num_resources, test_durations, machines, resources, lower)
-    #print(f"Result: {result}")
-    #if result is not None:
-    #    return result, original_test_durations, original_machines, original_resources, original_test_start, original_test_machine, lower
-
-
     # Binary search starts here
     lower = max(max(test_durations), max(sum(test_durations[i] for i in range(num_tests) if resources[r][i] == 1) for r in range(num_resources)))
     higher = sum(test_durations) - (num_machines - 1) * min(test_durations)
@@ -183,27 +164,6 @@ def revert_matrix_order(sorted_matrix, sorted_indices):
             original_matrix[j][sorted_index] = sorted_matrix[j][i]
     return original_matrix
 
-def calculate_dynamic_priority(test_durations, machines, resources, num_tests, num_machines, num_resources):
-    machine_load = [0] * num_machines  # Track load on each machine
-    resource_priority = calculate_resource_priority(resources, num_tests, num_resources)
-    
-    combined_priority = [0] * num_tests
-    for i in range(num_tests):
-        for m in range(num_machines):
-            if machines[m][i] == 1:
-                machine_load[m] += 1  # Update machine load
-        
-        # Calculate machine load factor
-        machine_count = sum(machines[m][i] for m in range(num_machines))  # Count of machines for this test
-        #print(i, "\n", machine_load, "\n", machines)
-        load_factor = sum(machine_load[m] for m in range(num_machines) if machines[m][i] == 1)
-        
-        resource_demand = sum(resources[r][i] for r in range(num_resources))
-
-        combined_priority[i] = resource_demand * 1000 + load_factor * 100 // machine_count + num_machines - machine_count
-        
-
-    return combined_priority
 
 def format_machines_output(test_start, test_machine, num_machines, resources):
     output = ""
@@ -234,7 +194,8 @@ def format_machines_output(test_start, test_machine, num_machines, resources):
 
     return output
 
-
+# Function to change the machines array. 
+# If a test can only run in a single machine its value in that machine becomes 2
 def modify_m_array(m):
     for i in range(len(m[0])): 
         machine_sum = sum(m[j][i] for j in range(len(m)))
@@ -244,19 +205,7 @@ def modify_m_array(m):
                     m[j][i] = 2
     return m
 
-
-def create_color_of_machines(machines):
-    num_machines = len(machines)
-    machine_groups = {}
-    for machine_id, machine_tests in enumerate(machines):
-        machine_tuple = tuple(machine_tests)
-        if machine_tuple not in machine_groups:
-            machine_groups[machine_tuple] = len(machine_groups) + 1
-
-    color_of_machines = [machine_groups[tuple(machines[i])] for i in range(num_machines)]
-    return color_of_machines
-
-
+# Function to calculate the amount of machines per test
 def compute_machines_per_test(machines):
     num_tests = len(machines[0])
     num_machines = len(machines)
@@ -267,22 +216,17 @@ def compute_machines_per_test(machines):
 
     return machines_per_test
 
-def create_test_no_resources(resources, num_tests, num_resources):
-    # Create a 1D array of 0s and 1s indicating if a test requires no resources
-    test_no_resources = [0] * num_tests
-    for i in range(num_tests):
-        if all(resources[r][i] == 0 for r in range(num_resources)):  # Check if all resource usages are 0
-            test_no_resources[i] = 1
-    return test_no_resources
-
 
 # Main entry point for the script
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run MiniZinc model with input from a custom file.")
     parser.add_argument('input_file', help="Path to the input data file")
+    parser.add_argument('output_file', help="Path to the output result file")
     args = parser.parse_args()
 
     # Run the solver with the provided arguments
     result, original_test_durations, original_machines, original_resources, original_test_start, original_test_machine, time = binary_search(args.input_file)
-    print("% Makespan: ", time)
-    print(format_machines_output(original_test_start, original_test_machine, len(original_machines), original_resources))
+    # Open the output file and write the results to it
+    with open(args.output_file, 'w') as f:
+        f.write(f"% Makespan: {time}\n")
+        f.write(format_machines_output(original_test_start, original_test_machine, len(original_machines), original_resources))
